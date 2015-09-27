@@ -5,12 +5,6 @@
 
 #define PINNUMBER "" //Pin Number for the SIM
 
-// Master pin assignments
-// AD0: Main battery current
-// AD1: Main battery voltage
-// AD2,4,6,8: Leaf(i) current
-// AD3,5,7,9: Leaf(i) voltage
-
 int leaf_master_current_pin = A0;    // Leaf 1 current
 int leaf_one_current_pin = A1;   // Leaf 2 current
 int leaf_two_current_pin = A2; // Leaf 3 current
@@ -21,10 +15,30 @@ int leaf_three = 12;      // Leaf3
 int ethernet_router = 11; // Neatgear
 int leaf_two = 10; // Leaf 2
 int leaf_one = 9;  // Leaf 1
-int master = 8;  //  Master
+int leaf_master = 8;  //  Master
 boolean leaf_one_on = false;
+boolean leaf_two_on = false;
+boolean leaf_three_on = false;
+boolean leaf_master_on=false;
+
+// Variables for Balance
 float leaf_one_balance=0;
+float leaf_two_balance=0;
+float leaf_three_balance=0;
+float leaf_master_balance=0;
+
+// Variables for current measured from 
+float leaf_master_current=0;
 float leaf_one_current=0;
+float leaf_two_current=0;
+float leaf_three_current=0;
+
+// Variables for master current and voltage
+float master_current=0;
+float master_voltage=0;
+
+int kwh_rate=1; // In Rs per KWH
+int coupon_code[7]; // [balance_1][balance_2][balance_3][leaf_number][validity_1][validity_2][validity_3]
 
 //Ethernet setup definitions
 byte mac[] = {0x90, 0xa2, 0xda, 0x00, 0x11, 0x07};
@@ -84,18 +98,33 @@ void setup()
 }
 
 void loop(){
-   
+  
+  //local variables 
   char inchar;
   char c;
   int i=0;
   int sms_code;
-  int kwh_rate=1; // In Rs per KWH
-  int coupon_code[3];
+  
+  // variables for coupon code decoding
+  
+  int balance_1=0;
+  int balance_2=0;
+  int balance_3=0;
+  
+  int leaf_number=0;
+  
+  int validity_1=0;
+  int validity_2=0;
+  int validity_3=0;  
+
 
   // READ ALL VOLTAGES AND CURRENTS FIRST
-
-  //pinMode(leaf_one_current_pin,INPUT);
   leaf_one_current=analogRead(leaf_one_current_pin);
+  leaf_two_current=analogRead(leaf_two_current_pin);
+  leaf_three_current=analogRead(leaf_three_current_pin);
+  leaf_master_current=analogRead(leaf_master_current_pin);
+  master_current=analogRead(master_current_pin);
+  master_voltage=analogRead(master_voltage_pin);
   
   // If there are any SMSs available()  
   if (sms.available())
@@ -110,27 +139,65 @@ void loop(){
   // Messages starting with # should be discarded
   if(sms.peek()=='#')
   {
-  Serial.println("Discarded SMS");
-  sms.flush();
+    Serial.println("Discarded SMS");
+    sms.flush();
   }
   
-  // Read message bytes and print them
+  // Read message bytes and store in coupon code
   while(c=sms.read()){
-    Serial.println(c);
     coupon_code[i]=int(c-'0');
-    Serial.println(coupon_code[i])  ;
+    Serial.println(coupon_code[i]);
     i=i+1;
   }
   
+  //decode the coupon code just received
+  
+  balance_1 = coupon_code[6];
+  balance_2 = coupon_code[5];
+  balance_3 = coupon_code[4];
+  
+  leaf_number = coupon_code[3];
+  
+  validity_1 = coupon_code[2];
+  validity_2 = coupon_code[1];
+  validity_3 = coupon_code[0];  
+ 
+  int validation_number = validity_3 * 100 + validity_2 *10 + validity_1; 
+  Serial.println(validation_number);
+  Serial.println(validation_number);
+  Serial.println(validation_number); 
+
   
   // TODO:sms_code validation goes here
   
-  if ((int)coupon_code[0] > 1){
+  if (validation_number > 100){
   
     Serial.println("\nVALID MESSAGE");
-    leaf_one_on=true;
-    leaf_one_balance= (int)coupon_code[0]*1; // set the balance value here
-    Serial.print(leaf_one_balance);
+    Serial.println(leaf_number);
+      switch (leaf_number) {
+          case 1:
+            leaf_one_balance= leaf_one_balance + balance_3*100 + balance_2*10 + balance_1*1;
+            Serial.println(leaf_one_balance);
+            break;
+          case 2:
+            leaf_two_balance= leaf_two_balance + balance_3*100 + balance_2*10 + balance_1*1;
+            break;
+          case 3:
+            leaf_three_balance= leaf_three_balance + balance_3*100 + balance_2*10 + balance_1*1;
+            break;
+          case 4:
+            leaf_master_balance= leaf_master_balance + balance_3*100 + balance_2*10 + balance_1*1;
+            break;
+          default: 
+            Serial.println("Not a valid leaf number");
+          break;
+        }
+    
+   
+    Serial.println(leaf_one_balance);
+    Serial.println(leaf_two_balance);
+    Serial.println(leaf_three_balance);
+    Serial.println(leaf_master_balance);
   }
   
   else {
@@ -141,34 +208,113 @@ void loop(){
   sms.flush();
   }
 
-
-  // READ ALL VOLTAGES AND CURRENTS FIRST
   
-  // turn leaf one or off depending on various logic
+  /***
+  
+  Turn leafs on or off depending on their individual bool switchges
+  
+  ***/
+  
   if (leaf_one_on){
     pinMode(leaf_one,OUTPUT);
-    Serial.println("turning leaf on");
+    Serial.println("turning leaf oneon");
     digitalWrite(leaf_one,HIGH);
   }
   
   else {
     pinMode(leaf_one,OUTPUT);
-    Serial.print("turning leaf off");
+    Serial.println("turning leaf 1 off");
     digitalWrite(leaf_one,LOW);
   }
   
+  if (leaf_two_on){
+    pinMode(leaf_two,OUTPUT);
+    Serial.println("turning leaf 2 on");
+    digitalWrite(leaf_two,HIGH);
+  }
+  
+  else {
+    pinMode(leaf_two,OUTPUT);
+    Serial.println("turning leaf 2 off");
+    digitalWrite(leaf_two,LOW);
+  }
+  
+  if (leaf_three_on){
+    pinMode(leaf_three,OUTPUT);
+    Serial.println("turning leaf 3 on");
+    digitalWrite(leaf_three,HIGH);
+  }
+  
+  else {
+    pinMode(leaf_three,OUTPUT);
+    Serial.println("turning leaf 3 off");
+    digitalWrite(leaf_three,LOW);
+  }
+  
+  if (leaf_master_on){
+    pinMode(leaf_master,OUTPUT);
+    Serial.println("turning master leaf on");
+    digitalWrite(leaf_master,HIGH);
+  }
+  
+  else {
+    pinMode(leaf_master,OUTPUT);
+    Serial.println("turning master leaf off");
+    digitalWrite(leaf_master,LOW);
+  }
+  
+ /***
+ Balance updating, and turning leafs off if they run out of balance happens in the next section
+ ***/
+  
   //checking for balance
   if (leaf_one_balance >0){ 
+    leaf_one_on=true; // turn leaf one on
     Serial.println(leaf_one_current);
-    leaf_one_balance= leaf_one_balance - (float)(leaf_one_current*9*kwh_rate)/(60*60);  //TODO: replace with accurate power logic  
+    leaf_one_balance= leaf_one_balance - (float)(leaf_one_current*9*kwh_rate)/(60*60);  // update balance, based on power consumption (TODO: replace with accurate power logic) 
     Serial.println(leaf_one_balance);
   }
   
   else {  
-    Serial.println("LEAF OUT OF BALANCE");
+    Serial.println("LEAF 1 OUT OF BALANCE");
     leaf_one_on=false;  
   }
   
+   if (leaf_two_balance >0){ 
+    leaf_two_on=true; // turn leaf one on
+    Serial.println(leaf_two_current);
+    leaf_two_balance= leaf_two_balance - (float)(leaf_two_current*9*kwh_rate)/(60*60);  // update balance, based on power consumption (TODO: replace with accurate power logic) 
+    Serial.println(leaf_two_balance);
+  }
+  
+  else {  
+    Serial.println("LEAF 2 OUT OF BALANCE");
+    leaf_two_on=false;  
+  }
+  
+   if (leaf_three_balance >0){ 
+    leaf_three_on=true; // turn leaf one on
+    Serial.println(leaf_three_current);
+    leaf_three_balance= leaf_three_balance - (float)(leaf_three_current*9*kwh_rate)/(60*60);  // update balance, based on power consumption (TODO: replace with accurate power logic) 
+    Serial.println(leaf_three_balance);
+  }
+  
+  else {  
+    Serial.println("LEAF 3 OUT OF BALANCE");
+    leaf_three_on=false;  
+  }
+  
+   if (leaf_master_balance >0){ 
+    leaf_master_on=true; // turn leaf one on
+    Serial.println(leaf_master_current);
+    leaf_master_balance= leaf_master_balance - (float)(leaf_master_current*9*kwh_rate)/(60*60);  // update balance, based on power consumption (TODO: replace with accurate power logic) 
+    Serial.println(leaf_master_balance);
+  }
+  
+  else {  
+    Serial.println("MASTER LEAF OUT OF BALANCE");
+    leaf_master_on=false;  
+  }
   
   // TODO: ethernet communication to prevent theft, and data transmission
   
