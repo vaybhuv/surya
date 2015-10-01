@@ -6,7 +6,7 @@
 
 
 #define PINNUMBER "" //Pin Number for the SIM
-#define LOW_BATTERY_VAL 8
+#define LOW_BATTERY_VAL 140
 
 int leaf_master_current_pin = A0;    // Leaf 1 current
 int leaf_one_current_pin = A1;   // Leaf 2 current
@@ -26,6 +26,8 @@ boolean leaf_two_on = false;
 boolean leaf_three_on = false;
 boolean leaf_master_on=false;
 boolean complete_reset_needed=false;
+boolean exit_flag=false;
+boolean low_battery_warning;
 
 // Variables for Balance
 float leaf_one_balance=0;
@@ -91,16 +93,33 @@ void blink_warning_lights(){
     pinMode(master_balance_led,HIGH);
     
     digitalWrite(shield_init_led,HIGH); // LED FOR GSM SHIELD
-    digitalWrite(shield_init_led,HIGH);
+    digitalWrite(master_balance_led,HIGH);
 
     delay(1000);
 
     digitalWrite(shield_init_led,LOW); // LED FOR GSM SHIELD
-    digitalWrite(shield_init_led,LOW);
+    digitalWrite(master_balance_led,LOW);
 
     delay(1000);
-  }
+  } 
+}
 
+void turn_off_all_leaves(){
+  
+  digitalWrite(leaf_one,LOW);
+  digitalWrite(leaf_two,LOW);
+  digitalWrite(leaf_three,LOW);
+  digitalWrite(leaf_master,LOW);
+  
+}
+
+void check_for_low_battery() {
+
+  Serial.println("Master voltage is : " +String(master_voltage));
+  if (master_voltage <= LOW_BATTERY_VAL){
+
+    low_battery_warning = true ;
+  }
   
 }
 
@@ -163,6 +182,46 @@ void initialize_balance_files_to_zero(){
     
   }
 
+void close_all_files(){
+
+ leaf_one_balance_file = SD.open("leaf1b.txt", FILE_WRITE);
+  if(leaf_one_balance_file){
+    leaf_one_balance_file.close();
+    Serial.println("Leaf one file closed");
+    
+  }
+  // this text file contains balance of leaf two
+  leaf_two_balance_file = SD.open("leaf2b.txt", FILE_WRITE);
+  if(leaf_two_balance_file){
+    leaf_three_balance_file.close();
+    Serial.println("Leaf two file closed");
+    
+  }
+  // this text file contains balance of leaf three
+
+  leaf_three_balance_file = SD.open("leaf3b.txt", FILE_WRITE);
+  if(leaf_three_balance_file){
+    leaf_three_balance_file.close();
+    Serial.println("Leaf three file closed");
+    
+  }
+  
+  leaf_master_balance_file = SD.open("leafmb.txt", FILE_WRITE);
+  if(leaf_master_balance_file){
+    leaf_master_balance_file.close();
+    Serial.println("Leaf master file closed");
+    
+  }
+
+ used_numbers_database = SD.open("used.txt", FILE_WRITE);
+  if(used_numbers_database){
+    used_numbers_database.close();
+    Serial.println("Useful numbers database closed");
+    
+  }
+
+  
+}
 
 void setup()
 {
@@ -194,10 +253,7 @@ void setup()
 
   else{
 
-    leaf_one_balance_file.close();
-    leaf_two_balance_file.close();
-    leaf_three_balance_file.close();
-    leaf_master_balance_file.close();
+    close_all_files();
   }
    // connection state initialize to false
   boolean notConnected = true;
@@ -295,12 +351,10 @@ void update_balance_from_sd_card(){
     else{
       len=inputString_4.length();
       temp_str=inputString_4.substring(0,len-1);
-      Serial.println(temp_str);
       leaf_master_balance=(temp_str.toInt())/100.0;
+      Serial.println(inputString_4);
       inputString_4 = "";
       len=0;
-      //Serial.println("LLL");
-      Serial.println(leaf_master_balance);
     }   
 
 }
@@ -325,6 +379,7 @@ void update_balance_from_sd_card(){
       temp_str=inputString_4.substring(0,len-1);
       leaf_one_balance=(temp_str.toInt())/100.0;
       inputString_4 = "";
+      Serial.println("111");
       len=0;
     }   
 
@@ -413,7 +468,7 @@ void update_latest_balance_to_sd_card(){
   leaf_three_balance_file = SD.open("leaf3b.txt", FILE_WRITE);
    if(leaf_three_balance_file){
     leaf_three_balance_file.println(String(leaf_three_balance*100.0,2)); ////POSSIBLE OVERFLOW
-    Serial.println("Writing to leaf three balance file");
+    //Serial.println("Writing to leaf three balance file");
     leaf_three_balance_file.close();
   }
 
@@ -507,7 +562,7 @@ void update_leaf_balances(){
       leaf_one_actual_current=0;
     }
     Serial.println("Leaf one is on consuming" + String(leaf_one_current));
-    leaf_one_balance= leaf_one_balance - (float)(leaf_one_actual_current*12*kwh_rate/1000.0)*(elapsed_time/1000.0);  // update balance, based on power consumption (TODO: replace with accurate power logic) 
+    leaf_one_balance= leaf_one_balance - (float)(leaf_one_actual_current*12*kwh_rate/1000.0)*(elapsed_time/(60.0*60.0*1000.0));  // update balance, based on power consumption (TODO: replace with accurate power logic) 
     if (leaf_one_balance < 0){
       leaf_one_balance=0;
     }
@@ -528,7 +583,7 @@ void update_leaf_balances(){
       leaf_two_actual_current=0;
     }// turn leaf one on
     Serial.println("Leaf two is on consuming" + String(leaf_two_current));
-    leaf_two_balance= leaf_two_balance - (float)(leaf_two_actual_current*12*kwh_rate/1000.0)*(elapsed_time/1000.0);
+    leaf_two_balance= leaf_two_balance - (float)(leaf_two_actual_current*12*kwh_rate/1000.0)*(elapsed_time/(60.0*60.0*60.0*1000.0));
      if (leaf_two_balance < 0){
       leaf_two_balance=0;
     }
@@ -550,7 +605,7 @@ void update_leaf_balances(){
       leaf_three_actual_current=0;
     }// turn leaf one on
     Serial.println("Leaf three is on consuming" + String(leaf_three_current));
-    leaf_three_balance= leaf_three_balance - (float)(leaf_three_actual_current*12*kwh_rate/1000.0)*(elapsed_time/1000.0);  // update balance, based on power consumption (TODO: replace with accurate power logic) 
+    leaf_three_balance= leaf_three_balance - (float)(leaf_three_actual_current*12*kwh_rate/1000.0)*(elapsed_time/(60.0*60.0*60.0*1000.0));  // update balance, based on power consumption (TODO: replace with accurate power logic) 
     if (leaf_three_balance <0){
       leaf_three_balance=0;
     }
@@ -571,7 +626,7 @@ void update_leaf_balances(){
       leaf_master_actual_current=0;
     }
     Serial.println("Leaf master is on consuming" + String(leaf_master_actual_current));
-    leaf_master_balance= leaf_master_balance - (float)(leaf_master_actual_current*12.0*kwh_rate/1000.0)*(elapsed_time/1000.0); // update balance, based on power consumption (TODO: replace with accurate power logic) 
+    leaf_master_balance= leaf_master_balance - (float)(leaf_master_actual_current*12.0*kwh_rate/1000.0)*(elapsed_time/(60.0*60.0*60.0*1000.0)); // update balance, based on power consumption (TODO: replace with accurate power logic) 
     if (leaf_master_balance <0){
       leaf_master_balance=0;
     }
@@ -697,7 +752,12 @@ void receive_sms_and_verify(){
     
   }
   
-  else {
+  else if (coupon_code[0]==0 && coupon_code[1]==0 && coupon_code[2]==0 && coupon_code[3]==0 && coupon_code[4]==0 && coupon_code[5] == 0 && coupon_code[6]== 1){
+
+    exit_flag=true;
+  }
+  
+  else{
     Serial.println("Invalid SMS RECEIVED");
   }
   
@@ -731,7 +791,18 @@ char inchar;
   elapsed_time=new_time-start_time;
   update_leaf_balances();
   update_latest_balance_to_sd_card();
-  
+
+  if (exit_flag){
+    turn_off_all_leaves();
+    blink_warning_lights();
+  }
+
+ check_for_low_battery();
+
+  if (low_battery_warning){
+    turn_off_all_leaves();
+    blink_warning_lights();
+  }
   // TODO: ethernet communication to prevent theft, and data transmission
   
   
