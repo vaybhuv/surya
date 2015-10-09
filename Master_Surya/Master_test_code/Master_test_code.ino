@@ -280,6 +280,8 @@ void setup()
   pinMode(shield_init_led,OUTPUT);
   digitalWrite(shield_init_led,HIGH); 
 
+  turn_off_all_leaves();
+
      
 }
 
@@ -351,7 +353,7 @@ void update_balance_from_sd_card(){
     else{
       len=inputString_4.length();
       temp_str=inputString_4.substring(0,len-1);
-      leaf_master_balance=(temp_str.toInt())/100.0;
+      leaf_master_balance=(temp_str.toInt())/1000000.0;
       Serial.println(inputString_4);
       inputString_4 = "";
       len=0;
@@ -377,9 +379,8 @@ void update_balance_from_sd_card(){
     else{
       len=inputString_4.length();
       temp_str=inputString_4.substring(0,len-1);
-      leaf_one_balance=(temp_str.toInt())/100.0;
+      leaf_one_balance=(temp_str.toInt())/1000000.0;
       inputString_4 = "";
-      Serial.println("111");
       len=0;
     }   
 
@@ -402,7 +403,7 @@ void update_balance_from_sd_card(){
     else{
       len=inputString_4.length();
       temp_str=inputString_4.substring(0,len-1);
-      leaf_two_balance=(temp_str.toInt())/100.0;
+      leaf_two_balance=(temp_str.toInt())/1000000.0;
       inputString_4 = "";
       len=0;
     }   
@@ -427,7 +428,7 @@ void update_balance_from_sd_card(){
     else{
       len=inputString_4.length();
       temp_str=inputString_4.substring(0,len-1);
-      leaf_three_balance=(temp_str.toInt())/100.0;
+      leaf_three_balance=(temp_str.toInt())/1000000.0;
       inputString_4 = "";
       len=0;
     }   
@@ -440,10 +441,10 @@ void update_balance_from_sd_card(){
     }
 
     Serial.println("BALANCES AFTER BEING UPDATED FROM SD ARE :");
-    Serial.println(leaf_one_balance);
-    Serial.println(leaf_two_balance);
-    Serial.println(leaf_three_balance);
-    Serial.println(leaf_master_balance);
+    Serial.println(leaf_one_balance,6);
+    Serial.println(leaf_two_balance,6);
+    Serial.println(leaf_three_balance,6);
+    Serial.println(leaf_master_balance,6);
     
 }
 
@@ -453,28 +454,28 @@ void update_latest_balance_to_sd_card(){
   Serial.println("Writing balance to SD card");
   leaf_one_balance_file = SD.open("leaf1b.txt", FILE_WRITE);
    if(leaf_one_balance_file){
-    leaf_one_balance_file.println(String(leaf_one_balance*100.0,2));
+    leaf_one_balance_file.println(String(leaf_one_balance*1000000.0,6));
     Serial.println("Writing to leaf one balance file");
     leaf_one_balance_file.close();
   }
 
   leaf_two_balance_file = SD.open("leaf2b.txt", FILE_WRITE);
    if(leaf_two_balance_file){
-    leaf_two_balance_file.println(String(leaf_two_balance*100.0,2));
+    leaf_two_balance_file.println(String(leaf_two_balance*1000000.0,6));
     Serial.println("Writing to leaf two balance file");
     leaf_two_balance_file.close();
   }
 
   leaf_three_balance_file = SD.open("leaf3b.txt", FILE_WRITE);
    if(leaf_three_balance_file){
-    leaf_three_balance_file.println(String(leaf_three_balance*100.0,2)); ////POSSIBLE OVERFLOW
+    leaf_three_balance_file.println(String(leaf_three_balance*1000000.0,6)); ////POSSIBLE OVERFLOW
     //Serial.println("Writing to leaf three balance file");
     leaf_three_balance_file.close();
   }
 
   leaf_master_balance_file = SD.open("leafmb.txt", FILE_WRITE);
    if(leaf_master_balance_file){
-    leaf_master_balance_file.println(String(leaf_master_balance*100.0,2));
+    leaf_master_balance_file.println(String(leaf_master_balance*1000000.0,6));
     Serial.println("Writing to leaf master balance file");
     leaf_master_balance_file.close();
   }
@@ -576,19 +577,19 @@ void update_leaf_balances(){
   
   if (leaf_two_balance >0){ 
     leaf_two_on=true; 
-    if(leaf_two_current>20){
+    if(leaf_two_current>35){
       leaf_two_actual_current=(leaf_two_current*4+200)/1000;
     }
     else{
       leaf_two_actual_current=0;
     }// turn leaf one on
     Serial.println("Leaf two is on consuming" + String(leaf_two_current));
-    leaf_two_balance= leaf_two_balance - (float)(leaf_two_actual_current*12*kwh_rate/1000.0)*(elapsed_time/(60.0*60.0*60.0*1000.0));
+    leaf_two_balance= leaf_two_balance - (float)(leaf_two_actual_current*12*kwh_rate/1000.0)*(elapsed_time/(60.0*60.0*1000.0));
      if (leaf_two_balance < 0){
       leaf_two_balance=0;
     }
     // update balance, based on power consumption (TODO: replace with accurate power logic) 
-    Serial.println("Leaf two is on with remaining balance: " + String(leaf_three_balance));
+    Serial.println("Leaf two is on with remaining balance: " + String(leaf_two_balance));
   }
   
   else {  
@@ -605,7 +606,7 @@ void update_leaf_balances(){
       leaf_three_actual_current=0;
     }// turn leaf one on
     Serial.println("Leaf three is on consuming" + String(leaf_three_current));
-    leaf_three_balance= leaf_three_balance - (float)(leaf_three_actual_current*12*kwh_rate/1000.0)*(elapsed_time/(60.0*60.0*60.0*1000.0));  // update balance, based on power consumption (TODO: replace with accurate power logic) 
+    leaf_three_balance= leaf_three_balance - (float)(leaf_three_actual_current*12*kwh_rate/1000.0)*(elapsed_time/(60.0*60.0*1000.0));  // update balance, based on power consumption (TODO: replace with accurate power logic) 
     if (leaf_three_balance <0){
       leaf_three_balance=0;
     }
@@ -625,11 +626,13 @@ void update_leaf_balances(){
     else{
       leaf_master_actual_current=0;
     }
-    Serial.println("Leaf master is on consuming" + String(leaf_master_actual_current));
-    leaf_master_balance= leaf_master_balance - (float)(leaf_master_actual_current*12.0*kwh_rate/1000.0)*(elapsed_time/(60.0*60.0*60.0*1000.0)); // update balance, based on power consumption (TODO: replace with accurate power logic) 
+    Serial.println("Leaf master is on consuming " + String(leaf_master_actual_current));
+    Serial.println((float)((leaf_master_actual_current*12.0*kwh_rate/1000.0)));
+    leaf_master_balance= leaf_master_balance - (float)((leaf_master_actual_current*12.0*kwh_rate/1000.0)*(elapsed_time)/(60.0*60.0*1000.0)); // update balance, based on power consumption (TODO: replace with accurate power logic) 
     if (leaf_master_balance <0){
       leaf_master_balance=0;
     }
+    Serial.println(leaf_master_balance,6);
     Serial.println("Leaf master is on with remaining balance: " + String(leaf_master_balance));
   }
   
@@ -789,6 +792,7 @@ char inchar;
   unsigned long new_time = millis();
   Serial.println(new_time);
   elapsed_time=new_time-start_time;
+  Serial.println(elapsed_time);
   update_leaf_balances();
   update_latest_balance_to_sd_card();
 
