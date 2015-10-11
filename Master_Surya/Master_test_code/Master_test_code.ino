@@ -50,6 +50,7 @@ float master_voltage=0;
 
 float kwh_rate=140.0; // In Rs per KWH
 int coupon_code[7]; // [balance_1][balance_2][balance_3][leaf_number][validity_1][validity_2][validity_3]
+int software_clock=0;
 
 //order of sms
 //v1 v2 v3 l b1 b1 b2
@@ -110,6 +111,7 @@ void turn_off_all_leaves(){
   digitalWrite(leaf_two,LOW);
   digitalWrite(leaf_three,LOW);
   digitalWrite(leaf_master,LOW);
+  Serial.println("Turn off all leaves");
   
 }
 
@@ -131,7 +133,7 @@ void remove_all_files_from_SD(){
      Serial.println("Leaf 2 balance file removed");
     }
   if(SD.remove("leaf3b.txt")){
-    Serial.println("Master leaf balance file removed");
+    Serial.println("Leaf 3 balance file removed");
   }
   if(SD.remove("leafmb.txt")){
       Serial.println("Master leaf balance file removed");
@@ -280,7 +282,10 @@ void setup()
   pinMode(shield_init_led,OUTPUT);
   digitalWrite(shield_init_led,HIGH); 
 
-  turn_off_all_leaves();
+  if(complete_reset_needed){
+    turn_off_all_leaves();
+    Serial.println("Turn off all leaves");
+  }
 
      
 }
@@ -354,7 +359,6 @@ void update_balance_from_sd_card(){
       len=inputString_4.length();
       temp_str=inputString_4.substring(0,len-1);
       leaf_master_balance=(temp_str.toInt())/1000000.0;
-      Serial.println(inputString_4);
       inputString_4 = "";
       len=0;
     }   
@@ -469,7 +473,7 @@ void update_latest_balance_to_sd_card(){
   leaf_three_balance_file = SD.open("leaf3b.txt", FILE_WRITE);
    if(leaf_three_balance_file){
     leaf_three_balance_file.println(String(leaf_three_balance*1000000.0,6)); ////POSSIBLE OVERFLOW
-    //Serial.println("Writing to leaf three balance file");
+    Serial.println("Writing to leaf three balance file");
     leaf_three_balance_file.close();
   }
 
@@ -496,7 +500,7 @@ void read_voltages_and_currents(){
 
 void update_leaf_states(){
   pinMode(leaf_one,OUTPUT);
-  //pinMode(leaf_two,OUTPUT);
+  pinMode(leaf_two,OUTPUT);
   pinMode(leaf_three,OUTPUT);
   pinMode(leaf_master,OUTPUT);
   pinMode(master_balance_led,OUTPUT);
@@ -545,6 +549,10 @@ void update_leaf_states(){
     digitalWrite(master_balance_led,LOW);   
   }
   
+}
+
+void soft_reset(){
+  asm volatile ("  jmp 0");  
 }
 
 void update_leaf_balances(){
@@ -787,13 +795,11 @@ char inchar;
 
  // RECIEVE SMS AND VERIFY
   receive_sms_and_verify();
-
+  update_leaf_balances();
   update_leaf_states();
   unsigned long new_time = millis();
-  Serial.println(new_time);
   elapsed_time=new_time-start_time;
-  Serial.println(elapsed_time);
-  update_leaf_balances();
+  
   update_latest_balance_to_sd_card();
 
   if (exit_flag){
@@ -808,7 +814,15 @@ char inchar;
     blink_warning_lights();
   }
   // TODO: ethernet communication to prevent theft, and data transmission
-  
+
+  if (software_clock > 20){
+    delay(100);
+    
+    soft_reset();
+    digitalWrite(shield_init_led,LOW); 
+  }
+
+  software_clock=software_clock+1;
   
    if (Serial.available() > 0) 
    {
